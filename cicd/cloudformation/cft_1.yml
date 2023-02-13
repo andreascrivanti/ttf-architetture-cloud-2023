@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  CodecommitRepoName:
+    Type: String
+    Description: name for codecommit repo
+    Default: ttf-devops-code
+Resources:
+  CodeGitRepo:
+    Type: 'AWS::CodeCommit::Repository'
+    Properties:
+      RepositoryName: !Ref CodecommitRepoName
+Outputs:
+  GitRepo:
+    Description: "Git Repository"
+    Value: !Ref CodeGitRepo

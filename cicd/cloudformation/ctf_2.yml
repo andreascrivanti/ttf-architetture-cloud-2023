@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  S3BucketDataName:
+    Type: String
+    Description: name for data bucket
+    Default: ascrivanti-ttf
+  CodecommitRepoName:
+    Type: String
+    Description: name for codecommit repo
+    Default: ttf-devops-code
+Resources:
+  CodeGitRepo:
+    Type: 'AWS::CodeCommit::Repository'
+    Properties:
+      RepositoryName: !Ref CodecommitRepoName
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: Private
+      BucketName: !Ref S3BucketDataName
+Outputs:
+  GitRepo:
+    Description: "Git Repository"
+    Value: !Ref CodeGitRepo
+  Bucket:
+    Description: "S3Bucket"
+    Value: !Ref S3Bucket

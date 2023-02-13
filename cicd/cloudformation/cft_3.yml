@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  S3BucketDataName:
+    Type: String
+    Description: name for data bucket
+    Default: ascrivanti-data-bucket
+  CodecommitRepoName:
+    Type: String
+    Description: name for codecommit repo
+    Default: ttf-devops-code
+Resources:
+  CodeGitRepo:
+    Type: 'AWS::CodeCommit::Repository'
+    Properties:
+      RepositoryName: !Ref CodecommitRepoName
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: Private
+      BucketName: !Ref S3BucketDataName
+  EC2SshSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  EC2BuildMachine:
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: "ami-0a8b4cd432b1c3063"
+      InstanceType: "t2.micro"
+      InstanceInitiatedShutdownBehavior: "stop"
+      IamInstanceProfile: "LabInstanceProfile"
+      KeyName: "ttf-2023-linux"
+      SecurityGroups:
+        - !Ref EC2SshSecurityGroup
+      UserData:
+          Fn::Base64: !Join
+            - ''
+            - - !Sub |
+                  #!/bin/bash
+                  yum install -y git
+                  yum install -y zip
+                  echo "DEST_S3_FOLDER=s3://${S3Bucket}/binaries/" >> /home/ec2-user/compile_script.sh
+                  echo "CODECOMMIT_REPO_NAME=${CodeGitRepo.Name}" >> /home/ec2-user/compile_script.sh
+                  echo "git config --global credential.helper '!aws codecommit credential-helper \$@'" >> /home/ec2-user/compile_script.sh
+                  echo "git config --global credential.UseHttpPath true" >> /home/ec2-user/compile_script.sh
+                  echo "git clone https://git-codecommit.us-east-1.amazonaws.com/v1/repos/\$CODECOMMIT_REPO_NAME /home/ec2-user/repo" >> /home/ec2-user/compile_script.sh
+                  echo "cd repo" >> /home/ec2-user/compile_script.sh
+                  echo "zip -q -r /home/ec2-user/code.zip *" >> /home/ec2-user/compile_script.sh
+                  echo "cd .." >> /home/ec2-user/compile_script.sh
+                  echo "aws s3 cp /home/ec2-user/code.zip \$DEST_S3_FOLDER" >> /home/ec2-user/compile_script.sh
+                  echo "rm -Rf repo" >> /home/ec2-user/compile_script.sh
+                  echo "rm code.zip" >> /home/ec2-user/compile_script.sh
+                  chown ec2-user:ec2-user /home/ec2-user/compile_script.sh
+                  chmod 755 /home/ec2-user/compile_script.sh
+                  shutdown -h now
+Outputs:
+  GitRepo:
+    Description: "Git Repository"
+    Value: !Ref CodeGitRepo
+  Bucket:
+    Description: "S3Bucket"
+    Value: !Ref S3Bucket
