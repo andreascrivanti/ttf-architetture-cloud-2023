@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  S3BucketMain:
+    Type: String
+    Description: S3 bucket with code and I/O files
+    Default: ascrivanti-ttf
+  ResultSNSTopicArn:
+    Type: String
+    Description: SNS topic Arn where push notifications
+Resources:
+
+  S3Bucket:
+    DependsOn: "S3EventZipperLambdaPermission"
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: Private
+      BucketName: ascrivanti-ttf-cft-data
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: "s3:ObjectCreated:*"
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: /zipper_cft_input/
+            Function: !GetAtt S3EventZipperLambda.Arn
+
+  S3EventZipperLambdaPermission:
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: S3EventZipperLambda
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: arn:aws:s3:::ascrivanti-ttf-cft-data
+    Type: AWS::Lambda::Permission
+
+  S3EventZipperLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref S3BucketMain
+        S3Key: "binaries/code.zip"
+      Handler: code.s3_event_zipper.lambda_handler
+      MemorySize: 128
+      Role: arn:aws:iam::097179323374:role/LabRole
+      Runtime: python3.8
+      Environment:
+        Variables:
+          OUTPUT_PREFIX: /zipper_cft_output
+          SNS_TOPIC_ARN: !Ref ResultSNSTopicArn
+      Timeout: 900
+
+  LogAnalyzerLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref S3BucketMain
+        S3Key: "binaries/code.zip"
+      Handler: code.log_analyzer.lambda_handler
+      MemorySize: 128
+      Role: arn:aws:iam::097179323374:role/LabRole
+      Runtime: python3.8
+      Environment:
+        Variables:
+          LOG_FILE_PATH: !Sub s3://${S3BucketMain}/data/weblog.csv
+      Timeout: 900
+
+Outputs:
+  S3BucketData:
+    Description: "S3 Bucket with input and output data"
+    Value: !Ref S3Bucket
+  S3EventZipperLambda:
+    Description: "Zipper lambda"
+    Value: !Ref S3EventZipperLambda
+  LogAnalyzerLambda:
+    Description: "LogAnalyzer lambda"
+    Value: !Ref LogAnalyzerLambda
+
+  

@@ -1,0 +1,19 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  S3BucketDataName:
+    Type: String
+    Description: name for S3 bucket for code and I/O files
+    Default: ascrivanti-ttf
+Resources:
+
+  #bucket to use for lambda I/O and binary repo
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: Private
+      BucketName: !Ref S3BucketDataName
+
+Outputs:
+  SNSTriggerTopic:
+    Description: "S3Bucket"
+    Value: !Ref S3Bucket
