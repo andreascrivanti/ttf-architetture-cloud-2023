@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  EnvironmentName:
+    Description: "An environment name that will be prefixed to resource names"
+    Type: String
+    Default: dev
+    AllowedValues: [dev, test, qa, stg, prd]
+  ProjectName:
+    Description: "Project name"
+    Type: String
+    MinLength: 1
+    ConstraintDescription: "is required"
+  ComputeEnvironmentName:
+    Description: "Compute environment name"
+    Type: String
+    MinLength: 1
+    ConstraintDescription: "is required"
+  CodeImageURI:
+    Description: "The ECR repo URI to code image"
+    Type: String
+    MinLength: 1
+    ConstraintDescription: "is required"
+  LabRoleArn:
+    Description: "LabRole ARN"
+    Type: String
+    MinLength: 1
+    ConstraintDescription: "is required"
+Resources:
+  IntelligentDatasetJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      JobDefinitionName: !Sub "${ProjectName}-job-definition-${EnvironmentName}"
+      PropagateTags: true
+      Timeout:
+         AttemptDurationSeconds: 86400
+      Type: container
+      PlatformCapabilities: [FARGATE]
+      Parameters:
+        configuration_name: /ids/bgt_location_aggregate
+      ContainerProperties:
+        Command: ["python3","-u","intelligent_datasets/ids_launcher/ids_handler_entry_point.py","--configuration","Ref::configuration_name", "--profile","Ref::profile"]
+        Image: !Ref CodeImageURI
+        FargatePlatformConfiguration:
+          PlatformVersion: LATEST
+        ExecutionRoleArn: !Ref LabRoleArn
+        ResourceRequirements:
+          - Type: MEMORY
+            Value: "512"
+          - Type: VCPU
+            Value: "0.25"
+        JobRoleArn: !Ref LabRoleArn
+        Environment:
+          - Name: SCRIPT_FOLDER
+            Value: "sql_scripts/ddl_views"
+
+  IntelligentDatasetJobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      JobQueueName: !Sub "${ProjectName}-job-queue-${EnvironmentName}"
+      Priority: 1
+      State: ENABLED
+      ComputeEnvironmentOrder:
+        - ComputeEnvironment: !Sub "${ComputeEnvironmentName}"
+          Order: 1

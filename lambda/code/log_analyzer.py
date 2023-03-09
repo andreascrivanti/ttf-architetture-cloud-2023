@@ -22,7 +22,7 @@ def lambda_handler(event, context):
         for row in csvreader:
             count_tot = count_tot + 1
             ip = row[0]
-            if selected_ip is "" or selected_ip == ip:
+            if selected_ip == "" or selected_ip == ip:
                 count_match = count_match + 1
                 if row[2] in urls:
                     urls[row[2]] = urls[row[2]] + 1

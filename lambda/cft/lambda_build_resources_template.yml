@@ -3,7 +3,14 @@ Parameters:
   S3BucketDataName:
     Type: String
     Description: name for S3 bucket for code and I/O files
-    Default: ascrivanti-ttf
+    Default: ascrivanti-lambda-ttf
+  GitUrl:
+    Type: String
+    Description: gitUrl
+    Default: https://github.com/andreascrivanti/ttf-architetture-cloud-2023.git
+  ec2InstanceKey:
+    Type: String
+    Description: ec2InstanceKey
 Resources:
 
   #bucket to use for lambda I/O and binary repo
@@ -14,21 +21,25 @@ Resources:
       BucketName: !Ref S3BucketDataName
 
   ### TO COMPILE CODE ###
-  # repo where push the code
-  CodeGitRepo:
-    Type: 'AWS::CodeCommit::Repository'
-    Properties:
-      RepositoryName: ttf-devops-code
 
   # machine to emulate codebuild, to create code artifact
+  EC2SshSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
   EC2BuildMachine:
     Type: AWS::EC2::Instance
     Properties: 
       ImageId: "ami-0a8b4cd432b1c3063"
-      InstanceType: "t2.micro"
+      InstanceType: "t2.nano"
       InstanceInitiatedShutdownBehavior: "stop"
       IamInstanceProfile: "LabInstanceProfile"
-      KeyName: "ttf"
+      KeyName: !Ref ec2InstanceKey
       UserData:
           Fn::Base64: !Join
             - ''
@@ -37,19 +48,18 @@ Resources:
                   yum install -y git
                   yum install -y zip
                   echo "DEST_S3_FOLDER=s3://${S3Bucket}/binaries/" >> /home/ec2-user/compile_script.sh
-                  echo "CODECOMMIT_REPO_NAME=${CodeGitRepo.Name}" >> /home/ec2-user/compile_script.sh
-                  echo "git config --global credential.helper '!aws codecommit credential-helper \$@'" >> /home/ec2-user/compile_script.sh
-                  echo "git config --global credential.UseHttpPath true" >> /home/ec2-user/compile_script.sh
-                  echo "git clone https://git-codecommit.us-east-1.amazonaws.com/v1/repos/\$CODECOMMIT_REPO_NAME /home/ec2-user/repo" >> /home/ec2-user/compile_script.sh
-                  echo "cd repo" >> /home/ec2-user/compile_script.sh
+                  echo "git clone ${GitUrl} /home/ec2-user/repo" >> /home/ec2-user/compile_script.sh
+                  echo "cd repo/lambda" >> /home/ec2-user/compile_script.sh
                   echo "zip -q -r /home/ec2-user/code.zip *" >> /home/ec2-user/compile_script.sh
-                  echo "cd .." >> /home/ec2-user/compile_script.sh
+                  echo "cd ../.." >> /home/ec2-user/compile_script.sh
                   echo "aws s3 cp /home/ec2-user/code.zip \$DEST_S3_FOLDER" >> /home/ec2-user/compile_script.sh
                   echo "rm -Rf repo" >> /home/ec2-user/compile_script.sh
                   echo "rm code.zip" >> /home/ec2-user/compile_script.sh
                   chown ec2-user:ec2-user /home/ec2-user/compile_script.sh
                   chmod 755 /home/ec2-user/compile_script.sh
                   shutdown -h now
+      SecurityGroups:
+        - !Ref EC2SshSecurityGroup
 
 Outputs:
   SNSTriggerTopic:

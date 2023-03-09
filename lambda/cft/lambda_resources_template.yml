@@ -3,18 +3,21 @@ Parameters:
   S3BucketMain:
     Type: String
     Description: S3 bucket with code and I/O files
-    Default: ascrivanti-ttf
-  ResultSNSTopicArn:
-    Type: String
-    Description: SNS topic Arn where push notifications
+    Default: ascrivanti-lambda-ttf
+
 Resources:
+  ProcessCompletedSNSTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      TopicName: process-finished
+      DisplayName: process-finished
 
   S3Bucket:
     DependsOn: "S3EventZipperLambdaPermission"
     Type: 'AWS::S3::Bucket'
     Properties:
       AccessControl: Private
-      BucketName: ascrivanti-ttf-cft-data
+      BucketName: !Sub ${S3BucketMain}-data
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: "s3:ObjectCreated:*"
@@ -22,18 +25,57 @@ Resources:
               S3Key:
                 Rules:
                   - Name: prefix
-                    Value: /zipper_cft_input/
+                    Value: zipper_cft_input
             Function: !GetAtt S3EventZipperLambda.Arn
+  
+  ProcessCompletedSNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument: !Sub |
+        {
+          "Version": "2008-10-17",
+          "Id": "sns_policy",
+          "Statement": [
+            {
+              "Sid": "__default_sns_policy",
+              "Effect": "Allow",
+              "Principal": { "AWS": "*" },
+              "Action": [
+                "SNS:GetTopicAttributes",
+                "SNS:SetTopicAttributes",
+                "SNS:AddPermission",
+                "SNS:RemovePermission",
+                "SNS:DeleteTopic",
+                "SNS:Subscribe",
+                "SNS:ListSubscriptionsByTopic",
+                "SNS:Publish",
+                "SNS:Receive"
+              ],
+              "Resource": "${ProcessCompletedSNSTopic}",
+              "Condition": { "StringEquals": { "AWS:SourceOwner": "${AWS::AccountId}" }
+              }
+            },
+            {
+              "Sid": "__sns_events_policy",
+              "Effect": "Allow",
+              "Principal": { "Service": "events.amazonaws.com" },
+              "Action": "sns:Publish",
+              "Resource": "${ProcessCompletedSNSTopic}"
+            }
+          ]
+        }
+      Topics:
+        - !Ref ProcessCompletedSNSTopic
 
   S3EventZipperLambdaPermission:
+    Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName:
         Ref: S3EventZipperLambda
       Principal: s3.amazonaws.com
       SourceAccount: !Ref AWS::AccountId
-      SourceArn: arn:aws:s3:::ascrivanti-ttf-cft-data
-    Type: AWS::Lambda::Permission
+      SourceArn: !Sub arn:aws:s3:::${S3BucketMain}-data
 
   S3EventZipperLambda:
     Type: AWS::Lambda::Function
@@ -43,28 +85,14 @@ Resources:
         S3Key: "binaries/code.zip"
       Handler: code.s3_event_zipper.lambda_handler
       MemorySize: 128
-      Role: arn:aws:iam::097179323374:role/LabRole
-      Runtime: python3.8
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
+      Runtime: python3.9
       Environment:
         Variables:
-          OUTPUT_PREFIX: /zipper_cft_output
-          SNS_TOPIC_ARN: !Ref ResultSNSTopicArn
+          OUTPUT_PREFIX: zipper_cft_output
+          SNS_TOPIC_ARN: !Ref ProcessCompletedSNSTopic
       Timeout: 900
 
-  LogAnalyzerLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      Code:
-        S3Bucket: !Ref S3BucketMain
-        S3Key: "binaries/code.zip"
-      Handler: code.log_analyzer.lambda_handler
-      MemorySize: 128
-      Role: arn:aws:iam::097179323374:role/LabRole
-      Runtime: python3.8
-      Environment:
-        Variables:
-          LOG_FILE_PATH: !Sub s3://${S3BucketMain}/data/weblog.csv
-      Timeout: 900
 
 Outputs:
   S3BucketData:
@@ -73,8 +101,5 @@ Outputs:
   S3EventZipperLambda:
     Description: "Zipper lambda"
     Value: !Ref S3EventZipperLambda
-  LogAnalyzerLambda:
-    Description: "LogAnalyzer lambda"
-    Value: !Ref LogAnalyzerLambda
 
   
