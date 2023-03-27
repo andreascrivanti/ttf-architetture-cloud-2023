@@ -16,13 +16,7 @@ def lambda_handler(event, context):
         data = s3.get_object(Bucket=bucket, Key=key)['Body'].read().decode("utf-8")
         csvreader = csv.reader(data.splitlines())
         urls = {}
-        selected_ip = ""
-        eventBody = None
-        eventJson = json.loads(json.dumps(event))
-        if 'body' in eventJson.keys():
-            eventBody = json.loads(eventJson['body'])
-            if 'ip' in eventBody.keys():
-                selected_ip = eventBody['ip']
+        selected_ip = event.get("ip","")
         print("select urls for ip '{}':".format(selected_ip))
         count_tot = 0
         count_match = 0
